@@ -167,8 +167,8 @@ public:
 		int dstp = (sh != th) ? sh : th;
 		std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
 		std::ofstream fout;
-		fout.open(buf,ios::out|ios::app|ios::binary);
-		fout << source.data() << "\t" << target.data() << std::endl;
+		fout.open(buf,std::ios::out|std::ios::app|std::ios::binary);
+		fout << source.id() << "\t" << target.id() << std::endl;
 		fout.close();
 	} // end of add edge
 
@@ -186,8 +186,8 @@ public:
 		int dstp = owning_proc;
 		std::sprintf(buf,"./outputs-vertices-%d.txt",dstp);
 		std::ofstream fout;
-		fout.open(buf,ios::out|ios::app|ios::binary);
-		fout << vid.data() << std::endl;
+		fout.open(buf,std::ios::out|std::ios::app|std::ios::binary);
+		fout << vid.id() << std::endl;
 		fout.close();
 	} // end of add vertex
 
@@ -589,8 +589,8 @@ public:
 								int dstp = owning_proc%cnodes;
 								std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
 								std::ofstream fout;
-								fout.open(buf,ios::out|ios::app|ios::binary);
-								fout << rec.source.data() << "\t" << rec.target.data() << std::endl;
+								fout.open(buf,std::ios::out|std::ios::app|std::ios::binary);
+								fout << rec.source.id() << "\t" << rec.target.id() << std::endl;
 								fout.close();
 							}
 							// set re-sent edges as empty for skipping
@@ -626,8 +626,8 @@ public:
 							int dstp = owning_proc%cnodes;
 							std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
 							std::ofstream fout;
-							fout.open(buf,ios::out|ios::app|ios::binary);
-							fout << rec.source.data() << "\t" << rec.target.data() << std::endl;
+							fout.open(buf,std::ios::out|std::ios::app|std::ios::binary);
+							fout << rec.source.id() << "\t" << rec.target.id() << std::endl;
 							fout.close();
 							// set re-sent edges as empty for skipping
 							matrix_edges[i] = edge_buffer_record();
