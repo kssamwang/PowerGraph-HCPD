@@ -504,6 +504,8 @@ namespace graphlab {
      * vertices (sending messages), interacting with the GraphLab
      * gather cache (posting deltas), and accessing engine state.
      *
+     * Context，并提供设备给相邻顶点（发送消息），与GraphLab收集缓存交互（发布增量），并访问引擎状态。
+     *
      */
     typedef icontext<graph_type, gather_type, message_type> icontext_type;
    
@@ -612,7 +614,10 @@ namespace graphlab {
      * \return the result of the gather computation which will be
      * "summed" to produce the input to the apply operation.  The
      * behavior of the "sum" is defined by the \ref gather_type.
-     * 
+     *
+     *
+     * 通过在graphlab :: ivertex_program :: gather_edges函数返回的边缘方向调用用户定义的graphlab :: ivertex_program :: gather函数来执行顶点程序的聚集。
+     * 聚集功能可以修改边缘数据，但不能修改顶点程序或顶点数据，并可以在多个边上并行执行。
      */
     virtual gather_type gather(icontext_type& context, 
                                const vertex_type& vertex, 
@@ -643,7 +648,10 @@ namespace graphlab {
      * \param [in] total The result of the gather phase.  If a vertex
      * has no neighbors then the total is the default value (i.e.,
      * gather_type()) of the gather type.
-     * 
+     *
+     * 通过调用用户定义的graphlab :: ivertex_program :: apply函数传递聚集函数的总和，在顶点程序上执行apply 函数。
+     * 如果graphlab :: ivertex_program :: gather_edges没有返回边，那么传递默认的聚集值来应用。apply函数可以修改顶点程序和顶点数据。
+     *
      */
     virtual void apply(icontext_type& context, 
                        vertex_type& vertex, 

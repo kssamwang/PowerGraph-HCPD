@@ -1,3 +1,29 @@
+/*  
+ * Copyright (c) 2013 Shanghai Jiao Tong University. 
+ *     All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an "AS
+ *  IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied.  See the License for the specific language
+ *  governing permissions and limitations under the License.
+ *
+ * For more about this software visit:
+ *
+ *      http://ipads.se.sjtu.edu.cn/projects/powerlyra.html
+ *
+ *
+ * 2014.04  add calling to asynchronous engine of powerlyra
+ * 2013.11  add calling to synchronous engine of powerlyra
+ *
+ */
+
 /**  
  * Copyright (c) 2009 Carnegie Mellon University. 
  *     All rights reserved.
@@ -31,6 +57,8 @@
 #include <graphlab/engine/iengine.hpp>
 #include <graphlab/engine/synchronous_engine.hpp>
 #include <graphlab/engine/async_consistent_engine.hpp>
+#include <graphlab/engine/powerlyra_sync_engine.hpp>
+#include <graphlab/engine/powerlyra_async_engine.hpp>
 
 namespace graphlab {
 
@@ -136,12 +164,23 @@ namespace graphlab {
      */
     typedef async_consistent_engine<VertexProgram> async_consistent_engine_type;
 
+    /**
+     * \brief the type of powerlyra synchronous engine
+     */
+    typedef powerlyra_sync_engine<VertexProgram> powerlyra_sync_engine_type;
+
+    /**
+     * \brief the type of asynchronous engine
+     */
+    typedef powerlyra_async_engine<VertexProgram> powerlyra_async_engine_type;
+
 
 
   private:
 
     /**
      * \brief A pointer to the actual engine in use.
+     * 实际引擎使用指针
      */
     iengine_type* engine_ptr;
 
@@ -193,6 +232,12 @@ namespace graphlab {
       } else if(engine_type == "async" || engine_type == "asynchronous") {
         logstream(LOG_INFO) << "Using the Asynchronous engine." << std::endl;
         engine_ptr = new async_consistent_engine_type(dc, graph, new_options);
+      } else if(engine_type == "plsync" || engine_type == "powerlyra_synchronous") {
+        logstream(LOG_INFO) << "Using the PowerLyra Synchronous engine." << std::endl;
+        engine_ptr = new powerlyra_sync_engine_type(dc, graph, new_options);
+      } else if(engine_type == "plasync" || engine_type == "powerlyra_asynchronous") {
+        logstream(LOG_INFO) << "Using the PowerLyra Asynchronous engine." << std::endl;
+        engine_ptr = new powerlyra_async_engine_type(dc, graph, new_options);
       } else {
         logstream(LOG_FATAL) << "Invalid engine type: " << engine_type << std::endl;
       }

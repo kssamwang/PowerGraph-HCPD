@@ -194,6 +194,7 @@ namespace graphlab {
 
     /**
      * \brief Signal a vertex with a particular message.
+     * 用特定的消息给顶点发送消息
      *
      * This function is an essential part of the GraphLab abstraction
      * and is used to encode iterative computation. Typically a vertex
@@ -201,6 +202,10 @@ namespace graphlab {
      * phase.  A vertex program may choose to signal neighbors on when
      * changes made during the previos phases break invariants or warrant
      * future computation on neighboring vertices.
+     *
+     * 这个函数是GraphLab抽象的一个重要部分
+     * 并用于编码迭代计算，通常是一个顶点程序将在scatter阶段发送信号给相邻顶点。
+     * 顶点程序可以选择在先前阶段发生的变化破坏不变量或保证将来在相邻顶点上的计算时向邻居发信号。
      * 
      * The signal function takes two arguments. The first is mandatory
      * and specifies which vertex to signal.  The second argument is
@@ -211,7 +216,9 @@ namespace graphlab {
      * \param message [in] The message to send, defaults to message_type(). 
      */
     virtual void signal(const vertex_type& vertex, 
-                        const message_type& message = message_type()) { }
+                        const message_type& message) { }
+
+    virtual void signal(const vertex_type& vertex) { }
 
     /**
      * \brief Send a message to a vertex ID.

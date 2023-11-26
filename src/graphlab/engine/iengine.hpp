@@ -282,6 +282,8 @@ namespace graphlab {
      * receive that message on start. The signal_all function must be
      * invoked on all machines simultaneously.  For example:
      *
+     * 这个函数发送相同的消息到所有将在开始时接收该消息的顶点。 signal_all函数必须同时在所有机器上调用。
+     *
      * \code
      * graphlab::synchronous_engine<vprog> engine(dc, graph, opts);
      * engine.signal_all(); // signal all vertices

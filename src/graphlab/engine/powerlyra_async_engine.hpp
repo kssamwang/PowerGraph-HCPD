@@ -1,5 +1,5 @@
-/**
- * Copyright (c) 2009 Carnegie Mellon University.
+/*  
+ * Copyright (c) 2013 Shanghai Jiao Tong University. 
  *     All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,15 +16,17 @@
  *
  * For more about this software visit:
  *
- *      http://www.graphlab.ml.cmu.edu
+ *      http://ipads.se.sjtu.edu.cn/projects/powerlyra.html
+ *
+ *
+ * 2014.04  implement asynchronous engine of powerlyra
  *
  */
 
 
 
-
-#ifndef GRAPHLAB_ASYNC_CONSISTENT_ENGINE
-#define GRAPHLAB_ASYNC_CONSISTENT_ENGINE
+#ifndef GRAPHLAB_POWERLYRA_ASYNC_ENGINE_HPP
+#define GRAPHLAB_POWERLYRA_ASYNC_ENGINE_HPP
 
 #include <deque>
 #include <boost/bind.hpp>
@@ -68,6 +70,8 @@ namespace graphlab {
    * scatters are guaranteed to be consistent, but this can be strengthened to
    * provide full mutual exclusion.
    *
+   * 异步一致性引擎异步执行顶点程序，并且可以确保相互排斥，从而不会同时执行相邻的顶点。
+   * 默认模式是“因式分解”的一致性，其中只有单个的收集/应用/分散被保证是一致的，但是这可以被加强以提供完全的相互排斥。
    *
    * \tparam VertexProgram
    * The user defined vertex program type which should implement the
@@ -79,20 +83,31 @@ namespace graphlab {
    * on all vertex programs in parallel to initialize the vertex program,
    * vertex data, and possibly signal vertices.
    *
+   * graphlab::ivertex_program::init 函数在所有顶点程序中被并行地调用，以初始化顶点程序，顶点数据以及可能的信号顶点。
+   *
    * After which, the engine spawns a collection of threads where each thread
    * individually performs the following tasks:
+   * 之后，引擎产生一组线程，每个线程分别执行以下任务：
+   *
    * \li Extract a message from the scheduler.
    * \li Perform distributed lock acquisition on the vertex which is supposed
    * to receive the message. The lock system enforces that no neighboring
    * vertex is executing at the same time. The implementation is based
    * on the Chandy-Misra solution to the dining philosophers problem.
+   *
+   * 从调度程序中提取消息。
+   * 在应该接收消息的顶点执行分布式锁获取。 锁定系统强制没有相邻顶点同时执行。 实施是基于Chandy-Misra解决哲学家就餐问题的。
+   *
    * (Chandy, K.M.; Misra, J. (1984). The Drinking Philosophers Problem.
    *  ACM Trans. Program. Lang. Syst)
    * \li Once lock acquisition is complete,
+   *  一旦lock锁获得完成
    *  \ref graphlab::ivertex_program::init is called on the vertex
    * program. As an optimization, any messages sent to this vertex
    * before completion of lock acquisition is merged into original message
    * extracted from the scheduler.
+   * graphlab::ivertex_program::init在顶点程序上被调用。 作为优化，在完成锁获取之前发送到该顶点的任何消息被合并到从调度器提取的原始消息中。
+   *
    * \li Execute the gather on the vertex program by invoking
    * the user defined \ref graphlab::ivertex_program::gather function
    * on the edge direction returned by the
@@ -100,12 +115,16 @@ namespace graphlab {
    * functions can modify edge data but cannot modify the vertex
    * program or vertex data and can be executed on multiple
    * edges in parallel.
+   * The Gather 函数可以修改边的数据，但是它缺不能修改顶点程序或者是顶点数据，并且它是可以在多个边下并行的执行。
+   *
    * * \li Execute the apply function on the vertex-program by
    * invoking the user defined \ref graphlab::ivertex_program::apply
    * function passing the sum of the gather functions.  If \ref
    * graphlab::ivertex_program::gather_edges returns no edges then
    * the default gather value is passed to apply.  The apply function
    * can modify the vertex program and vertex data.
+   * The Apply 函数可以修改顶点程序和顶点数据
+   *
    * \li Execute the scatter on the vertex program by invoking
    * the user defined \ref graphlab::ivertex_program::scatter function
    * on the edge direction returned by the
@@ -113,12 +132,17 @@ namespace graphlab {
    * functions can modify edge data but cannot modify the vertex
    * program or vertex data and can be executed on multiple
    * edges in parallel.
+   *
+   * The Scatter 函数可以修改边的数据，但是它缺不能修改顶点程序或者是顶点数据，并且它是可以在多个边下并行的执行。
+   *
    * \li Release all locks acquired in the lock acquisition stage,
    * and repeat until the scheduler is empty.
+   * 释放所有的锁在锁获取阶段，并重复，直到调度程序为空。
    *
    * The engine threads multiplexes the above procedure through a secondary
    * internal queue, allowing an arbitrary large number of vertices to
    * begin processing at the same time.
+   * 引擎线程通过二级内部队列复用上述过程，允许任意大量的顶点同时开始处理。
    *
    * ### Construction
    *
@@ -130,12 +154,16 @@ namespace graphlab {
    * In the distributed setting all program instances (running on each machine)
    * should construct an instance of the engine at the same time.
    *
+   * 异步一致性引擎是通过传递一个graphlab :: distributed_control对象来构造的，该对象管理引擎线程和引擎应该在其上运行的
+   * graphlab :: distributed_graph对象之间的协调。 该Graph应该已经被填充，并且在引擎被构建之后不能改变。 在分布式设置中，所有程序实例（在每台机器上运行）应该同时构建引擎的一个实例。
+   *
    * Computation is initiated by signaling vertices using either
-   * \ref graphlab::async_consistent_engine::signal or
-   * \ref graphlab::async_consistent_engine::signal_all.  In either case all
+   * \ref graphlab::powerlyra_async_engine::signal or
+   * \ref graphlab::powerlyra_async_engine::signal_all.  In either case all
    * machines should invoke signal or signal all at the same time.  Finally,
    * computation is initiated by calling the
-   * \ref graphlab::async_consistent_engine::start function.
+   * \ref graphlab::powerlyra_async_engine::start function.
+   * 计算被初始化通过发信号的顶点使用signal或者signal_all方法.无论哪种情况，所有机器都应该同时调用signal或signal all.最后,通过调用start来启动计算
    *
    * ### Example Usage
    *
@@ -174,7 +202,7 @@ namespace graphlab {
    *   graph.finalize();
    *   std::cout << "#vertices: " << graph.num_vertices()
    *             << " #edges:" << graph.num_edges() << std::endl;
-   *   graphlab::async_consistent_engine<pagerank_vprog> engine(dc, graph, clopts);
+   *   graphlab::powerlyra_async_engine<pagerank_vprog> engine(dc, graph, clopts);
    *   engine.signal_all();
    *   engine.start();
    *   std::cout << "Runtime: " << engine.elapsed_seconds();
@@ -202,7 +230,7 @@ namespace graphlab {
    * \li \b stacksize (default: 16384) Stacksize of each fiber.
    */
   template<typename VertexProgram>
-  class async_consistent_engine: public iengine<VertexProgram> {
+  class powerlyra_async_engine: public iengine<VertexProgram> {
 
   public:
     /**
@@ -302,10 +330,10 @@ namespace graphlab {
      * \brief The true type of the callback context interface which
      * implements icontext. \see graphlab::icontext graphlab::context
      */
-    typedef context<async_consistent_engine> context_type;
+    typedef context<powerlyra_async_engine> context_type;
 
     // context needs access to internal functions
-    friend class context<async_consistent_engine>;
+    friend class context<powerlyra_async_engine>;
 
     /// \internal \brief The type used to refer to vertices in the local graph
     typedef typename graph_type::local_vertex_type    local_vertex_type;
@@ -315,12 +343,12 @@ namespace graphlab {
     typedef typename graph_type::lvid_type            lvid_type;
 
     /// \internal \brief The type of the current engine instantiation
-    typedef async_consistent_engine<VertexProgram> engine_type;
+    typedef powerlyra_async_engine<VertexProgram> engine_type;
 
     typedef conditional_addition_wrapper<gather_type> conditional_gather_type;
     
     /// The RPC interface
-    dc_dist_object<async_consistent_engine<VertexProgram> > rmi;
+    dc_dist_object<powerlyra_async_engine<VertexProgram> > rmi;
 
     /// A reference to the active graph
     graph_type& graph;
@@ -401,6 +429,9 @@ namespace graphlab {
 
     bool endgame_mode;
 
+    /// The number of try_to_quit
+    long nttqs;
+    
     /// Time when engine is started
     float engine_start_time;
 
@@ -435,7 +466,7 @@ namespace graphlab {
      * \param opts A graphlab::graphlab_options object containing options and
      *             parameters for the scheduler and the engine.
      */
-    async_consistent_engine(distributed_control &dc,
+    powerlyra_async_engine(distributed_control &dc,
                             graph_type& graph,
                             const graphlab_options& opts = graphlab_options()) :
         rmi(dc, this), graph(graph), scheduler_ptr(NULL),
@@ -559,7 +590,7 @@ namespace graphlab {
 
 
   public:
-    ~async_consistent_engine() {
+    ~powerlyra_async_engine() {
       delete consensus;
       delete cmlocks;
       delete scheduler_ptr;
@@ -666,7 +697,7 @@ namespace graphlab {
         internal_signal(graph.vertex(gvid), message);
       } else {
         procid_t proc = graph.master(gvid);
-        rmi.remote_call(proc, &async_consistent_engine::internal_signal_gvid,
+        rmi.remote_call(proc, &powerlyra_async_engine::internal_signal_gvid,
                              gvid, message);
       }
     } 
@@ -685,7 +716,7 @@ namespace graphlab {
      */
     void internal_stop() {
       for (procid_t i = 0;i < rmi.numprocs(); ++i) {
-        rmi.remote_call(i, &async_consistent_engine::rpc_internal_stop);
+        rmi.remote_call(i, &powerlyra_async_engine::rpc_internal_stop);
       }
     }
 
@@ -822,6 +853,8 @@ namespace graphlab {
         force_stop = true;
       }
       fiber_control::yield();
+
+      nttqs ++;
       logstream(LOG_DEBUG) << rmi.procid() << "-" << threadid << ": " << "Termination Attempt " << std::endl;
       has_sched_msg = false;
       consensus->begin_done_critical_section(threadid);
@@ -838,8 +871,8 @@ namespace graphlab {
         endgame_mode = true;
         // put everyone in endgame
         for (procid_t i = 0;i < rmi.dc().numprocs(); ++i) {
-          rmi.remote_call(i, &async_consistent_engine::set_endgame_mode);
-        } 
+          rmi.remote_call(i, &powerlyra_async_engine::set_endgame_mode);
+        }
         bool ret = consensus->end_done_critical_section(threadid);
         if (ret == false) {
           logstream(LOG_DEBUG) << rmi.procid() << "-" << threadid <<  ": "
@@ -1003,12 +1036,17 @@ namespace graphlab {
       vertexlocks[lvid].unlock();
     }
 
+    bool high_lvid(const lvid_type lvid) {
+      return graph.l_degree_type(lvid) == graph_type::HIGH;
+    }
 
     /**
      * \internal
      * Called when the scheduler returns a vertex to run.
      * If this function is called with vertex locks acquired, prelocked
      * should be true. Otherwise it should be false.
+     *
+     * 当调度程序返回一个要运行的顶点时调用。如果在获取顶点锁的情况下调用此函数，则prelocked应为true。 否则它应该是错误的。
      */
     void eval_sched_task(const lvid_type lvid,
                          const message_type& msg) {
@@ -1054,6 +1092,7 @@ namespace graphlab {
       vertex_program_type vprog = vertex_program_type();
       local_vertex_type local_vertex(graph.l_vertex(lvid));
       vertex_type vertex(local_vertex);
+      bool high = high_lvid(lvid);
 
       /**************************************************************************/
       /*                               init phase                               */
@@ -1063,57 +1102,64 @@ namespace graphlab {
       /**************************************************************************/
       /*                              Gather Phase                              */
       /**************************************************************************/
-      conditional_gather_type gather_result;
+      conditional_gather_type gather_result;      
       std::vector<request_future<conditional_gather_type> > gather_futures;
-      foreach(procid_t mirror, local_vertex.mirrors()) {
-        gather_futures.push_back(
-            object_fiber_remote_request(rmi, 
-                                        mirror, 
-                                        &async_consistent_engine::perform_gather, 
-                                        vid,
-                                        vprog));
+      edge_dir_type gather_dir = vprog.gather_edges(context, vertex);
+      
+      if (high || (gather_dir == graphlab::ALL_EDGES) 
+               || (gather_dir == graphlab::OUT_EDGES)) {
+        foreach(procid_t mirror, local_vertex.mirrors()) {
+          gather_futures.push_back(
+              object_fiber_remote_request(rmi, 
+                                          mirror, 
+                                          &powerlyra_async_engine::perform_gather, 
+                                          vid,
+                                          vprog));
+        }
       }
       gather_result += perform_gather(vid, vprog);
-
-      for(size_t i = 0;i < gather_futures.size(); ++i) {
-        gather_result += gather_futures[i]();
+      if (high || (gather_dir == graphlab::ALL_EDGES) 
+               || (gather_dir == graphlab::OUT_EDGES)) {
+        for(size_t i = 0;i < gather_futures.size(); ++i) {
+          gather_result += gather_futures[i]();
+        }
       }
+      
+      /**************************************************************************/
+      /*                              apply phase                               */
+      /**************************************************************************/
+      vertexlocks[lvid].lock();
+      vprog.apply(context, vertex, gather_result.value);      
+      vertexlocks[lvid].unlock();
 
-     /**************************************************************************/
-     /*                              apply phase                               */
-     /**************************************************************************/
-     vertexlocks[lvid].lock();
-     vprog.apply(context, vertex, gather_result.value);      
-     vertexlocks[lvid].unlock();
 
+      /**************************************************************************/
+      /*                            scatter phase                               */
+      /**************************************************************************/
 
-     /**************************************************************************/
-     /*                            scatter phase                               */
-     /**************************************************************************/
+      // should I wait for the scatter? nah... but in case you want to
+      // the code is commented below
+      /*foreach(procid_t mirror, local_vertex.mirrors()) {
+        rmi.remote_call(mirror, 
+                        &powerlyra_async_engine::perform_scatter, 
+                        vid,
+                        vprog,
+                        local_vertex.data());
+      }*/
 
-     // should I wait for the scatter? nah... but in case you want to
-     // the code is commented below
-     /*foreach(procid_t mirror, local_vertex.mirrors()) {
-       rmi.remote_call(mirror, 
-                       &async_consistent_engine::perform_scatter, 
-                       vid,
-                       vprog,
-                       local_vertex.data());
-     }*/
-
-     std::vector<request_future<void> > scatter_futures;
-     foreach(procid_t mirror, local_vertex.mirrors()) {
-       scatter_futures.push_back(
-           object_fiber_remote_request(rmi, 
-                                       mirror, 
-                                       &async_consistent_engine::perform_scatter, 
-                                       vid,
-                                       vprog,
-                                       local_vertex.data()));
-     }
-     perform_scatter_local(lvid, vprog);
-     for(size_t i = 0;i < scatter_futures.size(); ++i) 
-       scatter_futures[i]();
+      std::vector<request_future<void> > scatter_futures;
+      foreach(procid_t mirror, local_vertex.mirrors()) {
+        scatter_futures.push_back(
+            object_fiber_remote_request(rmi, 
+                                        mirror, 
+                                        &powerlyra_async_engine::perform_scatter, 
+                                        vid,
+                                        vprog,
+                                        local_vertex.data()));
+      }
+      perform_scatter_local(lvid, vprog);
+      for(size_t i = 0;i < scatter_futures.size(); ++i) 
+        scatter_futures[i]();
 
       /************************************************************************/
       /*                           Release Locks                              */
@@ -1142,7 +1188,7 @@ namespace graphlab {
       bool has_sched_msg = false;
       std::vector<std::vector<lvid_type> > internal_lvid;
       lvid_type sched_lvid;
-
+      
       message_type msg;
       float last_aggregator_check = timer::approx_time_seconds();
       timer ti; ti.start();
@@ -1218,7 +1264,6 @@ namespace graphlab {
 
       // now. It is of critical importance that we match the number of 
       // actual workers
-     
 
       // start the aggregator
       aggregator.start(ncpus);
@@ -1234,6 +1279,7 @@ namespace graphlab {
       force_stop = false;
       endgame_mode = false;
       programs_executed = 0;
+      nttqs = 0;
       launch_timer.start();
 
       termination_reason = execution_status::RUNNING;
@@ -1257,6 +1303,9 @@ namespace graphlab {
       size_t ctasks = programs_executed.value;
       rmi.all_reduce(ctasks);
       programs_executed.value = ctasks;
+
+      logstream(LOG_INFO) << rmi.procid() << " #try_to_quit = " << nttqs
+                          << std::endl;
 
       rmi.cout() << "Completed Tasks: " << programs_executed.value << std::endl;
 

@@ -1,3 +1,29 @@
+/*  
+ * Copyright (c) 2013 Shanghai Jiao Tong University. 
+ *     All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an "AS
+ *  IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied.  See the License for the specific language
+ *  governing permissions and limitations under the License.
+ *
+ * For more about this software visit:
+ *
+ *      http://ipads.se.sjtu.edu.cn/projects/powerlyra.html
+ *
+ *
+ * 2014.02  add calling to bipartitie-aware partitioning
+ * 2013.11  add calling to hybrid partitioning for power-law graphs
+ *
+ */
+
 /**
  * Copyright (c) 2009 Carnegie Mellon University.
  *     All rights reserved.
@@ -76,12 +102,27 @@
 #include <graphlab/graph/graph_gather_apply.hpp>
 #include <graphlab/graph/ingress/distributed_ingress_base.hpp>
 #include <graphlab/graph/ingress/distributed_oblivious_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_hdrf_ingress.hpp>
 #include <graphlab/graph/ingress/distributed_random_ingress.hpp>
 #include <graphlab/graph/ingress/distributed_identity_ingress.hpp>
 
 #include <graphlab/graph/ingress/sharding_constraint.hpp>
 #include <graphlab/graph/ingress/distributed_constrained_random_ingress.hpp>
+
+// bipartite
+#include <graphlab/graph/ingress/distributed_bipartite_random_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_bipartite_affinity_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_bipartite_aweto_ingress.hpp>
+
+// hybrid 
+#include <graphlab/graph/ingress/distributed_hybrid_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_hybrid_ginger_ingress.hpp>
+
+#include <graphlab/graph/ingress/distributed_matrix_hybrid_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_matrix_strict_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_matrix_ginger_ingress.hpp>
+
+#include <graphlab/graph/ingress/distributed_matrix_block_ingress.hpp>
+#include <graphlab/graph/ingress/distributed_topoX_ingress.hpp>
 
 #include <graphlab/graph/graph_hash.hpp>
 
@@ -102,6 +143,8 @@ namespace graphlab {
 
   /** \brief A directed graph datastructure which is distributed across
    * multiple machines.
+   *
+   * 鍒嗗竷鍦ㄥ涓満鍣ㄤ笂鐨勬湁鍚戝浘鏁版嵁缁撴瀯
    *
    * This class implements a distributed directed graph datastructure where
    * vertices and edges may contain arbitrary user-defined datatypes as
@@ -200,13 +243,6 @@ namespace graphlab {
    *                perfect difference set.  This obtains the highest quality partition,
    *                reducing runtime memory consumption significantly, without load-time penalty.
    *                Currently only works with p^2+p+1 number of machines (p prime).
-   *	
-   * \li \c "hdrf" Runs at roughly the speed of oblivious.
-   *	            HDRF provides the smallest average replication factor with close to optimal load balance.
-   *		    The HDRF algorithm is extensively described in the following publication:
-   *		    F. Petroni, L. Querzoni, K. Daudjee, S. Kamali and G. Iacoboni: 
-   *		    "HDRF: Stream-Based Partitioning for Power-Law Graphs". 
-   *		    CIKM, 2015.
    *
    * ### Referencing Vertices / Edges Many GraphLab operations will pass around
    * vertex_type and edge_type objects. These objects are light-weight copyable
@@ -408,12 +444,27 @@ namespace graphlab {
     friend class distributed_random_ingress<VertexData, EdgeData>;
     friend class distributed_identity_ingress<VertexData, EdgeData>;
     friend class distributed_oblivious_ingress<VertexData, EdgeData>;
-    friend class distributed_hdrf_ingress<VertexData, EdgeData>;
     friend class distributed_constrained_random_ingress<VertexData, EdgeData>;
+    friend class distributed_bipartite_random_ingress<VertexData, EdgeData>;
+    friend class distributed_bipartite_affinity_ingress<VertexData, EdgeData>;
+    friend class distributed_bipartite_aweto_ingress<VertexData, EdgeData>;
+    friend class distributed_hybrid_ingress<VertexData, EdgeData>;
+    friend class distributed_hybrid_ginger_ingress<VertexData, EdgeData>;
+
+    friend class distributed_matrix_hybrid_ingress<VertexData, EdgeData>;
+    friend class distributed_matrix_strict_ingress<VertexData, EdgeData>;
+    friend class distributed_matrix_ginger_ingress<VertexData, EdgeData>;
+    friend class distributed_matrix_block_ingress<VertexData, EdgeData>;
+    friend class distributed_topoX_ingress<VertexData, EdgeData>;
 
     typedef graphlab::vertex_id_type vertex_id_type;
     typedef graphlab::lvid_type lvid_type;
     typedef graphlab::edge_id_type edge_id_type;
+
+    enum degree_type {HIGH = 0, LOW, NUM_DEGREE_TYPES};
+
+    enum cuts_type {VERTEX_CUTS = 0, EDGE_CUTS, HYBRID_CUTS, HYBRID_GINGER_CUTS,
+      NUM_CUTS_TYPES};
 
     struct vertex_type;
     typedef bool edge_list_type;
@@ -431,6 +482,8 @@ namespace graphlab {
      * state. It behaves as a reference to location of the vertex
      * in the internal graph representation. While vertex_type may be copied
      * it must not outlive the underlying graph.
+     *
+     * 瀹氫箟椤剁偣绫诲瀷
      */
     struct vertex_type {
       typedef distributed_graph graph_type;
@@ -512,6 +565,8 @@ namespace graphlab {
      * and essentially only a reference to the location of the edge
      * information in the underlying graph.  Therefore edge objects
      * can be copied but must not outlive the underlying graph.
+     *
+     * 瀹氫箟杈圭被鍨�
      */
     class edge_type {
     private:
@@ -622,13 +677,13 @@ namespace graphlab {
                       const graphlab_options& opts = graphlab_options()) :
       rpc(dc, this), finalized(false), vid2lvid(),
       nverts(0), nedges(0), local_own_nverts(0), nreplicas(0),
-      ingress_ptr(NULL), 
+      how_cuts(VERTEX_CUTS), ingress_ptr(NULL),
 #ifdef _OPENMP
       vertex_exchange(dc, omp_get_max_threads()), 
 #else
       vertex_exchange(dc), 
 #endif
-      vset_exchange(dc), parallel_ingress(true) {
+      vset_exchange(dc), parallel_ingress(true), data_affinity(false) {
       rpc.barrier();
       set_options(opts);
     }
@@ -643,10 +698,29 @@ namespace graphlab {
     }
   private:
     void set_options(const graphlab_options& opts) {
+      std::string ingress_method = "";
+
+      // hybrid cut
+      size_t threshold = 100;
+
+      //topox
+      size_t theta = 100;
+      size_t etheta = 1000;
+      size_t ceng = 1;
+
+      // ginger heuristic
+      size_t interval = std::numeric_limits<size_t>::max();
+      size_t nedges = 0;
+      size_t nverts = 0;
+      // bipartite
+      std::string favorite = "source"; /* source or target */
+
+      
+      // deprecated
       size_t bufsize = 50000;
       bool usehash = false;
       bool userecent = false;
-      std::string ingress_method = "";
+
       std::vector<std::string> keys = opts.get_graph_args().get_option_keys();
       foreach(std::string opt, keys) {
         if (opt == "ingress") {
@@ -659,30 +733,84 @@ namespace graphlab {
           if (!parallel_ingress && rpc.procid() == 0)
             logstream(LOG_EMPH) << "Disable parallel ingress. Graph will be streamed through one node."
               << std::endl;
+        } else if (opt == "threshold") {
+          opts.get_graph_args().get_option("threshold", threshold);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: threshold = "
+                                << threshold << std::endl;
+        }else if (opt == "ceng") {
+            opts.get_graph_args().get_option("ceng", ceng);
+            if (rpc.procid() == 0)
+                logstream(LOG_EMPH) << "Graph Option: ceng = "
+                                    << ceng << std::endl;
+        }else if (opt == "theta") {
+            opts.get_graph_args().get_option("theta", theta);
+            if (rpc.procid() == 0)
+                logstream(LOG_EMPH) << "Graph Option: theta = "
+                                    << theta << std::endl;
+        }else if (opt == "etheta"){
+            opts.get_graph_args().get_option("etheta", etheta);
+            if (rpc.procid() == 0)
+                logstream(LOG_EMPH) << "Graph Option: etheta = "
+                                    << etheta << std::endl;
+        } else if (opt == "interval") {
+          opts.get_graph_args().get_option("interval", interval);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: interval = "
+                                << interval << std::endl;
+        }  else if (opt == "nedges") {
+          opts.get_graph_args().get_option("nedges", nedges);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: nedges = "
+                                << nedges << std::endl;
+        } else if (opt == "nverts") {
+          opts.get_graph_args().get_option("nverts", nverts);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: nverts = "
+                                << nverts << std::endl;
+        } else if (opt == "affinity") {
+          opts.get_graph_args().get_option("affinity", data_affinity);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: affinity = "
+                                << data_affinity << std::endl;
+        } else if (opt == "favorite") {
+          opts.get_graph_args().get_option("favorite", favorite);
+          if(favorite != "target") favorite = "source";
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: favorite = "
+                                << favorite << std::endl;
         }
+        
         /**
          * These options below are deprecated.
          */
         else if (opt == "bufsize") {
           opts.get_graph_args().get_option("bufsize", bufsize);
-           if (rpc.procid() == 0)
+          if (rpc.procid() == 0)
             logstream(LOG_EMPH) << "Graph Option: bufsize = "
               << bufsize << std::endl;
-       } else if (opt == "usehash") {
+        } else if (opt == "usehash") {
           opts.get_graph_args().get_option("usehash", usehash);
           if (rpc.procid() == 0)
             logstream(LOG_EMPH) << "Graph Option: usehash = "
               << usehash << std::endl;
         } else if (opt == "userecent") {
           opts.get_graph_args().get_option("userecent", userecent);
-           if (rpc.procid() == 0)
+          if (rpc.procid() == 0)
             logstream(LOG_EMPH) << "Graph Option: userecent = "
               << userecent << std::endl;
-        }  else {
+        }
+	else if (opt == "partitionfile") {
+          opts.get_graph_args().get_option("partitionfile", partitionfile);
+          if (rpc.procid() == 0)
+            logstream(LOG_EMPH) << "Graph Option: partitionfile = "
+              << partitionfile << std::endl;
+        }else{
           logstream(LOG_ERROR) << "Unexpected Graph Option: " << opt << std::endl;
         }
-    }
-      set_ingress_method(ingress_method, bufsize, usehash, userecent);
+      }
+      set_ingress_method(ingress_method, bufsize, usehash, userecent, favorite,
+                                 threshold, theta,etheta, nedges, nverts, ceng, interval);
     }
 
   public:
@@ -698,10 +826,15 @@ namespace graphlab {
      * \brief Commits the graph structure. Once a graph is finalized it may
      * no longer be modified. Must be called on all machines simultaneously.
      *
+     * 鎻愪氦鍥剧粨鏋�.涓�鏃﹀浘褰㈠畬鎴�,瀹冨彲鑳戒笉鍐嶈淇敼. 蹇呴』鍚屾椂鍦ㄦ墍鏈夋満鍣ㄤ笂璋冪敤銆�
+     *
      * Finalize is used to complete graph ingress by resolving vertex
      * ownship and completing local data structures. Once a graph is finalized
      * its structure may not be modified. Repeated calls to finalize() do
      * nothing.
+     *
+     * Finalize鐢ㄤ簬閫氳繃瑙ｆ瀽椤剁偣鏈湴骞跺畬鎴愭湰鍦版暟鎹粨鏋勬潵瀹屾垚鍥惧舰鍏ュ彛銆� 涓�鏃﹀浘褰㈠畬鎴愶紝鍏剁粨鏋勫彲鑳戒笉浼氳淇敼銆� 閲嶅璋冪敤finalize锛堬級绯荤粺灏嗕粈涔堜篃涓嶅仛銆�
+     *
      */
     void finalize() {
 #ifndef USE_DYNAMIC_LOCAL_GRAPH
@@ -709,6 +842,7 @@ namespace graphlab {
 #endif
       ASSERT_NE(ingress_ptr, NULL);
       logstream(LOG_INFO) << "Distributed graph: enter finalize" << std::endl;
+      //ingress鎸囬拡璋冪敤finalize鏂规硶
       ingress_ptr->finalize();
       lock_manager.resize(num_local_vertices());
       rpc.barrier(); 
@@ -901,52 +1035,10 @@ namespace graphlab {
       return true;
     }
 
-    bool add_edge_and_partid(vertex_id_type source, vertex_id_type target,size_t partid,
-                  const EdgeData& edata = EdgeData()) {
-#ifndef USE_DYNAMIC_LOCAL_GRAPH
-      if(finalized) {
-        logstream(LOG_FATAL)
-          << "\n\tAttempting to add an edge to a finalized graph."
-          << "\n\tEdges cannot be added to a graph after finalization."
-          << std::endl;
-      }
-#else 
-      finalized = false;
-#endif
-      if(source == vertex_id_type(-1)) {
-        logstream(LOG_ERROR)
-          << "\n\tThe source vertex with id vertex_id_type(-1)\n"
-          << "\tor unsigned value " << vertex_id_type(-1) << " in edge \n"
-          << "\t(" << source << "->" << target << ") is not allowed.\n"
-          << "\tThe -1 vertex id is reserved for internal use."
-          << std::endl;
-        return false;
-      }
-      if(target == vertex_id_type(-1)) {
-        logstream(LOG_ERROR)
-          << "\n\tThe target vertex with id vertex_id_type(-1)\n"
-          << "\tor unsigned value " << vertex_id_type(-1) << " in edge \n"
-          << "\t(" << source << "->" << target << ") is not allowed.\n"
-          << "\tThe -1 vertex id is reserved for internal use."
-          << std::endl;
-        return false;
-      }
-      if(source == target) {
-        logstream(LOG_ERROR)
-          << "\n\tTrying to add self edge (" << source << "->" << target << ")."
-          << "\n\tSelf edges are not allowed."
-          << std::endl;
-        return false;
-      }
-      ASSERT_NE(ingress_ptr, NULL);
-      // std::cout << "machine :"<< rpc.procid() << " , add_edge and part... :" << source << " -> " << target << " partid: "<< partid << std::endl;
-      ingress_ptr->add_edge_and_partid(source, target, partid ,edata);
-      return true;
-    }
-
    /**
     * \brief Performs a map-reduce operation on each vertex in the
     * graph returning the result.
+    * 鍦ㄥ浘鐨勬瘡涓《鐐逛笂鎵цmap-reduce鎿嶄綔锛岃繑鍥炵粨鏋溿��
     *
     * Given a map function, map_reduce_vertices() call the map function on all
     * vertices in the graph. The return values are then summed together and the
@@ -2237,7 +2329,8 @@ namespace graphlab {
 #endif
       for(size_t i = 0; i < graph_files.size(); ++i) {
         if ((parallel_ingress && (i % rpc.numprocs() == rpc.procid()))
-            || (!parallel_ingress && (rpc.procid() == 0))) {
+            || (!parallel_ingress && (rpc.procid() == 0))
+            || (data_affinity)) {
           logstream(LOG_EMPH) << "Loading graph from file: " << graph_files[i] << std::endl;
           // is it a gzip file ?
           const bool gzip = boost::ends_with(graph_files[i], ".gz");
@@ -2285,6 +2378,7 @@ namespace graphlab {
       if (graph_files.size() == 0) {
         logstream(LOG_WARNING) << "No files found matching " << prefix << std::endl;
       }
+
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
@@ -2457,6 +2551,7 @@ namespace graphlab {
     /**
      *  \brief load a graph with a standard format. Must be called on all
      *  machines simultaneously.
+     * 鍔犺浇涓�涓爣鍑嗘牸寮忕殑鍥惧舰銆� 蹇呴』鍚屾椂鍦ㄦ墍鏈夋満鍣ㄤ笂璋冪敤銆�
      *
      *  The supported graph formats are described in \ref graph_formats.
      */
@@ -2471,6 +2566,9 @@ namespace graphlab {
       } else if (format == "tsv") {
         line_parser = builtin_parsers::tsv_parser<distributed_graph>;
         load(path, line_parser);
+      } else if (format == "rtsv") { // debug
+        line_parser = builtin_parsers::rtsv_parser<distributed_graph>;
+        load(path, line_parser);
       } else if (format == "csv") {
         line_parser = builtin_parsers::csv_parser<distributed_graph>;
         load(path, line_parser);
@@ -2481,9 +2579,6 @@ namespace graphlab {
          load_direct(path,&graph_type::load_bintsv4_from_stream);
       } else if (format == "bin") {
          load_binary(path);
-      } else if (format == "self_tsv") {
-        line_parser = builtin_parsers::self_tsv_parser<distributed_graph>;
-        load(path, line_parser);
       } else {
         logstream(LOG_ERROR)
           << "Unrecognized Format \"" << format << "\"!" << std::endl;
@@ -2651,6 +2746,8 @@ namespace graphlab {
     struct vertex_record {
       /// The official owning processor for this vertex
       procid_t owner;
+      /// The degree type of vertex
+      degree_type dtype;
       /// The local vid of this vertex on this proc
       vertex_id_type gvid;
       /// The number of in edges
@@ -2659,9 +2756,9 @@ namespace graphlab {
           NOT be in this set.*/
       mirror_type _mirrors;
       vertex_record() :
-        owner(-1), gvid(-1), num_in_edges(0), num_out_edges(0) { }
+        owner(-1), dtype(HIGH), gvid(-1), num_in_edges(0), num_out_edges(0) { }
       vertex_record(const vertex_id_type& vid) :
-        owner(-1), gvid(vid), num_in_edges(0), num_out_edges(0) { }
+        owner(-1), dtype(HIGH), gvid(vid), num_in_edges(0), num_out_edges(0) { }
       procid_t get_owner () const { return owner; }
       const mirror_type& mirrors() const { return _mirrors; }
       size_t num_mirrors() const { return _mirrors.popcount(); }
@@ -2673,6 +2770,7 @@ namespace graphlab {
       void load(iarchive& arc) {
         clear();
         arc >> owner
+            >> dtype
             >> gvid
             >> num_in_edges
             >> num_out_edges
@@ -2681,6 +2779,7 @@ namespace graphlab {
 
       void save(oarchive& arc) const {
         arc << owner
+            << dtype
             << gvid
             << num_in_edges
             << num_out_edges
@@ -2690,6 +2789,7 @@ namespace graphlab {
       bool operator==(const vertex_record& other) const {
         return (
             (owner == other.owner) &&
+            (dtype == other.dtype) &&
             (gvid == other.gvid)  &&
             (num_in_edges == other.num_in_edges) &&
             (num_out_edges == other.num_out_edges) && 
@@ -2866,6 +2966,13 @@ namespace graphlab {
       return lvid2record[lvid].owner;
     }
 
+    /** \internal
+     * \brief Returns the type of vertex.
+     */
+    degree_type l_degree_type(lvid_type lvid) const {
+      ASSERT_LT(lvid, lvid2record.size());
+      return lvid2record[lvid].dtype;
+    }
 
     /** \internal
      *  \brief Returns a reference to the internal graph representation
@@ -3175,6 +3282,10 @@ namespace graphlab {
 
   public:
 
+    cuts_type get_cuts_type() const { return how_cuts; }
+
+    void set_cuts_type(cuts_type type) { how_cuts = type; }
+
     // For the warp engine to find the remote instances of this class
     size_t get_rpc_obj_id() {
       return rpc.get_obj_id();
@@ -3206,6 +3317,13 @@ namespace graphlab {
     /** The global number of vertex replica */
     size_t nreplicas;
 
+    /** The cut type */
+    cuts_type how_cuts;
+
+    /** The partition file path*/
+    /** @@add by wenwen*/
+    std::string partitionfile;
+
     /** pointer to the distributed ingress object*/
     distributed_ingress_base<VertexData, EdgeData>* ingress_ptr;
 
@@ -3218,32 +3336,71 @@ namespace graphlab {
     /** Command option to disable parallel ingress. Used for simulating single node ingress */
     bool parallel_ingress;
 
+    /** Command option to enable data affinity. Currently only supported by bipartite */
+    bool data_affinity;
 
     lock_manager_type lock_manager;
 
+    //璁剧疆閲囩敤鍝鍥惧垎鍖虹瓥鐣�
     void set_ingress_method(const std::string& method,
-        size_t bufsize = 50000, bool usehash = false, bool userecent = false) {
+                                size_t bufsize = 50000, bool usehash = false, bool userecent = false,
+                                std::string favorite = "source",
+                                size_t threshold = 100, size_t theta = 100,size_t etheta=1000, size_t nedges = 0, size_t nverts = 0,size_t ceng=1,
+                                size_t interval = std::numeric_limits<size_t>::max()) {
       if(ingress_ptr != NULL) { delete ingress_ptr; ingress_ptr = NULL; }
       if (method == "oblivious") {
         if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use oblivious ingress, usehash: " << usehash
           << ", userecent: " << userecent << std::endl;
         ingress_ptr = new distributed_oblivious_ingress<VertexData, EdgeData>(rpc.dc(), *this, usehash, userecent);
-      } else if (method == "hdrf") {
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use hdrf oblivious ingress, usehash: " << usehash
-          << ", userecent: " << userecent << std::endl;
-        ingress_ptr = new distributed_hdrf_ingress<VertexData, EdgeData>(rpc.dc(), *this, usehash, userecent);
       } else if  (method == "random") {
         if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use random ingress" << std::endl;
         ingress_ptr = new distributed_random_ingress<VertexData, EdgeData>(rpc.dc(), *this); 
-      } else if (method == "grid") {
+      } else if  (method == "matrix_hybrid") {
+          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ingress" << std::endl;
+          ingress_ptr = new distributed_matrix_hybrid_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
+      } else if  (method == "matrix_strict") {
+          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ingress" << std::endl;
+          ingress_ptr = new distributed_matrix_strict_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
+      }
+      else if  (method == "matrix_ginger") {
+          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ginger ingress" << std::endl;
+          ingress_ptr = new distributed_matrix_ginger_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold, nedges, nverts, interval);
+      }else if  (method == "topoX") {
+          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use topoX ingress" << std::endl;
+          ingress_ptr = new distributed_topoX_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold,theta,etheta,ceng);
+      }else if  (method == "matrix_block") {
+          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix block ingress" << std::endl;
+          ingress_ptr = new distributed_matrix_block_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold,theta,etheta,ceng);
+      }
+      else if (method == "grid") {
         if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use grid ingress" << std::endl;
         ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "grid");
       } else if (method == "pds") {
         if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use pds ingress" << std::endl;
         ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "pds");
+      } else if (method == "bipartite") {
+        if(data_affinity){
+          if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite ingress w/ affinity" << std::endl;
+          ingress_ptr = new distributed_bipartite_affinity_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
+        } else{
+          if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite ingress w/o affinity" << std::endl;
+          ingress_ptr = new distributed_bipartite_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
+        }
+      } else if (method == "bipartite_aweto") {
+        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite_aweto ingress" << std::endl;
+        ingress_ptr = new distributed_bipartite_aweto_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
+      } else if (method == "hybrid") {
+        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use hybrid ingress" << std::endl;
+        ingress_ptr = new distributed_hybrid_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
+        set_cuts_type(HYBRID_CUTS);
+      } else if (method == "hybrid_ginger") {
+        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use hybrid ginger ingress" << std::endl;
+        ASSERT_GT(nedges, 0); ASSERT_GT(nverts, 0);
+        ingress_ptr = new distributed_hybrid_ginger_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold, nedges, nverts, interval);
+        set_cuts_type(HYBRID_GINGER_CUTS);
       } else {
         // use default ingress method if none is specified
-        std::string ingress_auto="";
+        std::string ingress_auto = "";
         size_t num_shards = rpc.numprocs();
         int nrow, ncol, p;
         if (sharding_constraint::is_pds_compatible(num_shards, p)) {
@@ -3256,7 +3413,7 @@ namespace graphlab {
           ingress_auto="oblivious";
           ingress_ptr = new distributed_oblivious_ingress<VertexData, EdgeData>(rpc.dc(), *this, usehash, userecent);
         }
-        if (rpc.procid() == 0)logstream(LOG_EMPH) << "Automatically determine ingress method: " << ingress_auto << std::endl;
+        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Automatically determine ingress method: " << ingress_auto << std::endl;
       }
       // batch ingress is deprecated
       // if (method == "batch") {
@@ -3523,3 +3680,4 @@ namespace graphlab {
 #include <graphlab/macros_undef.hpp>
 
 #endif
+

@@ -1,5 +1,5 @@
-/**  
- * Copyright (c) 2009 Carnegie Mellon University. 
+/*  
+ * Copyright (c) 2013 Shanghai Jiao Tong University. 
  *     All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,16 @@
  *
  * For more about this software visit:
  *
- *      http://www.graphlab.ml.cmu.edu
+ *      http://ipads.se.sjtu.edu.cn/projects/powerlyra.html
+ *
+ *
+ * 2014.04  implement bipartite-aware random partitioning
  *
  */
 
-#ifndef GRAPHLAB_DISTRIBUTED_RANDOM_INGRESS_HPP
-#define GRAPHLAB_DISTRIBUTED_RANDOM_INGRESS_HPP
+
+#ifndef GRAPHLAB_DISTRIBUTED_BIPARTITE_RANDOM_INGRESS_HPP
+#define GRAPHLAB_DISTRIBUTED_BIPARTITE_RANDOM_INGRESS_HPP
 
 #include <boost/functional/hash.hpp>
 
@@ -37,37 +41,40 @@ namespace graphlab {
   class distributed_graph;
 
   /**
-   * \brief Ingress object assigning edges using randoming hash function.
+   * \brief Ingress object assigning edges using randoming hash function on favorite.
    */
   template<typename VertexData, typename EdgeData>
-  class distributed_random_ingress : 
+  class distributed_bipartite_random_ingress : 
     public distributed_ingress_base<VertexData, EdgeData> {
   public:
     typedef distributed_graph<VertexData, EdgeData> graph_type;
     /// The type of the vertex data stored in the graph 
     typedef VertexData vertex_data_type;
     /// The type of the edge data stored in the graph 
-    typedef EdgeData   edge_data_type;
+    typedef EdgeData edge_data_type;
 
 
     typedef distributed_ingress_base<VertexData, EdgeData> base_type;
-   
+    
+    bool favorite_source;
   public:
-    distributed_random_ingress(distributed_control& dc, graph_type& graph) :
+    distributed_bipartite_random_ingress(distributed_control& dc, graph_type& graph, const std::string& favorite) :
     base_type(dc, graph) {
+      favorite_source = (favorite == "source") ? true : false;
     } // end of constructor
 
-    ~distributed_random_ingress() { }
+    ~distributed_bipartite_random_ingress() { }
 
-    /** Add an edge to the ingress object using random assignment. */
+    /** Add an edge to the ingress object using random of "favorite" assignment. */
     void add_edge(vertex_id_type source, vertex_id_type target,
                   const EdgeData& edata) {
       typedef typename base_type::edge_buffer_record edge_buffer_record;
-      const procid_t owning_proc = base_type::edge_decision.edge_to_proc_random(source, target, base_type::rpc.numprocs());
+      vertex_id_type favorite = favorite_source ? source : target;
+      const procid_t owning_proc = graph_hash::hash_vertex(favorite) % base_type::rpc.numprocs();
       const edge_buffer_record record(source, target, edata);
       base_type::edge_exchange.send(owning_proc, record);
     } // end of add edge
-  }; // end of distributed_random_ingress
+  }; // end of distributed_bipartite_random_ingress
 }; // end of namespace graphlab
 #include <graphlab/macros_undef.hpp>
 
