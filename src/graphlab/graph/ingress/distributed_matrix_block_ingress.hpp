@@ -11,6 +11,8 @@
 
 #include <graphlab/macros_def.hpp>
 #include <bitset>
+#include <fstream>
+
 namespace graphlab {
 template<typename VertexData, typename EdgeData>
 class distributed_graph;
@@ -152,16 +154,22 @@ public:
 		const edge_buffer_record record(source, target, edata);
 		const size_t sh = source%numproc;
 		const size_t th = target%numproc;
-#ifdef _OPENMP
-		if (sh!=th)
-			matrix_edge_exchange.send(sh, record, omp_get_thread_num());
-		matrix_edge_exchange.send(th, record, omp_get_thread_num());
-#else
-		if (sh != th)
-			matrix_edge_exchange.send(sh, record);
-		matrix_edge_exchange.send(th, record);
-#endif
-
+// #ifdef _OPENMP
+// 		if (sh!=th)
+// 			matrix_edge_exchange.send(sh, record, omp_get_thread_num());
+// 		matrix_edge_exchange.send(th, record, omp_get_thread_num());
+// #else
+// 		if (sh != th)
+// 			matrix_edge_exchange.send(sh, record);
+// 		matrix_edge_exchange.send(th, record);
+// #endif
+		char buf[32];
+		int dstp = (sh != th) ? sh : th;
+		std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
+		std::ofstream fout;
+		fout.open(buf,ios::out|ios::app|ios::binary);
+		fout << source.data() << "\t" << target.data() << std::endl;
+		fout.close();
 	} // end of add edge
 
 	/* add vdata */
@@ -169,11 +177,18 @@ public:
 		const vertex_buffer_record record(vid, vdata);
 		const procid_t owning_proc = standalone ? 0 :
 									 vid % matrix_rpc.numprocs();
-#ifdef _OPENMP
-		matrix_vertex_exchange.send(owning_proc, record, omp_get_thread_num());
-#else
-		matrix_vertex_exchange.send(owning_proc, record);
-#endif
+// #ifdef _OPENMP
+// 		matrix_vertex_exchange.send(owning_proc, record, omp_get_thread_num());
+// #else
+// 		matrix_vertex_exchange.send(owning_proc, record);
+// #endif
+		char buf[32];
+		int dstp = owning_proc;
+		std::sprintf(buf,"./outputs-vertices-%d.txt",dstp);
+		std::ofstream fout;
+		fout.open(buf,ios::out|ios::app|ios::binary);
+		fout << vid.data() << std::endl;
+		fout.close();
 	} // end of add vertex
 
 	void set_queue(const size_t& v, const size_t& owning,const size_t& vp,const size_t& matrixcount){
@@ -294,10 +309,10 @@ public:
 				for (target_hash_table_type::iterator iter = iht.begin(); iter != iht.end(); iter++){
 					in_degree_set[iter->first] = iht[iter->first].size();
 				}
-				for (procid_t p = 0; p < nprocs; ++p) {
-					if (p != l_procid)
-						in_degree_exchange.send(p, in_degree_set);
-				}
+				// for (procid_t p = 0; p < nprocs; ++p) {
+				// 	if (p != l_procid)
+				// 		in_degree_exchange.send(p, in_degree_set);
+				// }
 
 				// synchronize on in_degree_set
 				in_degree_exchange.flush();
@@ -356,7 +371,7 @@ public:
 								}
 								for (size_t ix = 0; ix < nprocs; ix++){
 									if (ix != l_procid)
-										vht_exchange.send(ix, hash_pair_type(p_point, min_proc));
+										;//vht_exchange.send(ix, hash_pair_type(p_point, min_proc));
 									else
 										vht[p_point] = min_proc; //@wenwen: vertex hash table
 								}
@@ -409,7 +424,7 @@ public:
 							}
 							for (size_t ix = 0; ix < nprocs; ix++){
 								if (ix != l_procid)
-									vht_exchange.send(ix, hash_pair_type(iter->first, min_proc));
+									;//vht_exchange.send(ix, hash_pair_type(iter->first, min_proc));
 								else
 									vht[iter->first] = min_proc;
 							}
@@ -462,7 +477,7 @@ public:
 							}
 							for (size_t ix = 0; ix < nprocs; ix++){
 								if (ix != l_procid)
-									vht_exchange.send(ix, hash_pair_type(iter->first, min_proc ));
+									;//vht_exchange.send(ix, hash_pair_type(iter->first, min_proc ));
 								else
 									vht[iter->first] = min_proc;
 							}
@@ -569,7 +584,14 @@ public:
 						}
 						if (owning_proc != l_procid){
 							for (int j = 0; j < ceng; j++){
-								matrix_edge_exchange.send(owning_proc%cnodes, rec);
+								//matrix_edge_exchange.send(owning_proc%cnodes, rec);
+								char buf[32];
+								int dstp = owning_proc%cnodes;
+								std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
+								std::ofstream fout;
+								fout.open(buf,ios::out|ios::app|ios::binary);
+								fout << rec.source.data() << "\t" << rec.target.data() << std::endl;
+								fout.close();
 							}
 							// set re-sent edges as empty for skipping
 							matrix_edges[i] = edge_buffer_record();
@@ -593,13 +615,20 @@ public:
 							// update mht
 							for (procid_t p = 0; p < nprocs; ++p) {
 								if (p != l_procid)
-									mht_exchange.send(p, master_pair_type(rec.target, owning_proc));
+									;//mht_exchange.send(p, master_pair_type(rec.target, owning_proc));
 								else
 									mht[rec.target] = owning_proc;
 							}
 						}
 						if (owning_proc != l_procid){
-							matrix_edge_exchange.send(owning_proc%cnodes, rec);
+							//matrix_edge_exchange.send(owning_proc%cnodes, rec);
+							char buf[32];
+							int dstp = owning_proc%cnodes;
+							std::sprintf(buf,"./outputs-edges-%d.txt",dstp);
+							std::ofstream fout;
+							fout.open(buf,ios::out|ios::app|ios::binary);
+							fout << rec.source.data() << "\t" << rec.target.data() << std::endl;
+							fout.close();
 							// set re-sent edges as empty for skipping
 							matrix_edges[i] = edge_buffer_record();
 							--nedges;
@@ -931,11 +960,12 @@ public:
 			for (lvid_type i = lvid_start; i < graph.lvid2record.size(); ++i) {
 				procid_t master = graph.lvid2record[i].owner;
 				if (master != l_procid)
-#ifdef _OPENMP
-					vid_buffer.send(master, graph.lvid2record[i].gvid, omp_get_thread_num());
-#else
-					vid_buffer.send(master, graph.lvid2record[i].gvid);
-#endif
+					;
+// #ifdef _OPENMP
+// 					vid_buffer.send(master, graph.lvid2record[i].gvid, omp_get_thread_num());
+// #else
+// 					vid_buffer.send(master, graph.lvid2record[i].gvid);
+// #endif
 			}
 			vid_buffer.flush();
 			matrix_rpc.barrier();
