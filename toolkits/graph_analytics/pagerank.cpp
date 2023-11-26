@@ -242,34 +242,34 @@ int main(int argc, char** argv) {
   dc.cout() << "#vertices: " << graph.num_vertices()
             << " #edges:" << graph.num_edges() << std::endl;
 
-  // Initialize the vertex data
-  graph.transform_vertices(init_vertex);
+  // // Initialize the vertex data
+  // graph.transform_vertices(init_vertex);
 
-  // Running The Engine -------------------------------------------------------
-  graphlab::omni_engine<pagerank> engine(dc, graph, exec_type, clopts);
-  engine.signal_all();
-  engine.start();
-  const double runtime = engine.elapsed_seconds();
-  dc.cout() << "Finished Running engine in " << runtime
-            << " seconds." << std::endl;
+  // // Running The Engine -------------------------------------------------------
+  // graphlab::omni_engine<pagerank> engine(dc, graph, exec_type, clopts);
+  // engine.signal_all();
+  // engine.start();
+  // const double runtime = engine.elapsed_seconds();
+  // dc.cout() << "Finished Running engine in " << runtime
+  //           << " seconds." << std::endl;
 
 
-  const double total_rank = graph.map_reduce_vertices<double>(map_rank);
-  std::cout << "Total rank: " << total_rank << std::endl;
+  // const double total_rank = graph.map_reduce_vertices<double>(map_rank);
+  // std::cout << "Total rank: " << total_rank << std::endl;
 
-  // Save the final graph -----------------------------------------------------
-  if (saveprefix != "") {
-    graph.save(saveprefix, pagerank_writer(),
-               false,    // do not gzip
-               true,     // save vertices
-               false);   // do not save edges
-  }
+  // // Save the final graph -----------------------------------------------------
+  // if (saveprefix != "") {
+  //   graph.save(saveprefix, pagerank_writer(),
+  //              false,    // do not gzip
+  //              true,     // save vertices
+  //              false);   // do not save edges
+  // }
 
-  double totalpr = graph.map_reduce_vertices<double>(pagerank_sum);
-  std::cout << "Totalpr = " << totalpr << "\n";
+  // double totalpr = graph.map_reduce_vertices<double>(pagerank_sum);
+  // std::cout << "Totalpr = " << totalpr << "\n";
 
-  // Tear-down communication layer and quit -----------------------------------
-  graphlab::mpi_tools::finalize();
+  // // Tear-down communication layer and quit -----------------------------------
+  // graphlab::mpi_tools::finalize();
   return EXIT_SUCCESS;
 } // End of main
 

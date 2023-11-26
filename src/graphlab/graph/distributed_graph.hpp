@@ -101,29 +101,10 @@
 
 #include <graphlab/graph/graph_gather_apply.hpp>
 #include <graphlab/graph/ingress/distributed_ingress_base.hpp>
-#include <graphlab/graph/ingress/distributed_oblivious_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_random_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_identity_ingress.hpp>
 
 #include <graphlab/graph/ingress/sharding_constraint.hpp>
-#include <graphlab/graph/ingress/distributed_constrained_random_ingress.hpp>
-
-// bipartite
-#include <graphlab/graph/ingress/distributed_bipartite_random_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_bipartite_affinity_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_bipartite_aweto_ingress.hpp>
-
-// hybrid 
-#include <graphlab/graph/ingress/distributed_hybrid_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_hybrid_ginger_ingress.hpp>
-
-#include <graphlab/graph/ingress/distributed_matrix_hybrid_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_matrix_strict_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_matrix_ginger_ingress.hpp>
 
 #include <graphlab/graph/ingress/distributed_matrix_block_ingress.hpp>
-#include <graphlab/graph/ingress/distributed_topoX_ingress.hpp>
-
 #include <graphlab/graph/graph_hash.hpp>
 
 #include <graphlab/util/hopscotch_map.hpp>
@@ -441,21 +422,21 @@ namespace graphlab {
 
 
     // Make friends with Ingress classes
-    friend class distributed_random_ingress<VertexData, EdgeData>;
-    friend class distributed_identity_ingress<VertexData, EdgeData>;
-    friend class distributed_oblivious_ingress<VertexData, EdgeData>;
-    friend class distributed_constrained_random_ingress<VertexData, EdgeData>;
-    friend class distributed_bipartite_random_ingress<VertexData, EdgeData>;
-    friend class distributed_bipartite_affinity_ingress<VertexData, EdgeData>;
-    friend class distributed_bipartite_aweto_ingress<VertexData, EdgeData>;
-    friend class distributed_hybrid_ingress<VertexData, EdgeData>;
-    friend class distributed_hybrid_ginger_ingress<VertexData, EdgeData>;
+    // friend class distributed_random_ingress<VertexData, EdgeData>;
+    // friend class distributed_identity_ingress<VertexData, EdgeData>;
+    // friend class distributed_oblivious_ingress<VertexData, EdgeData>;
+    // friend class distributed_constrained_random_ingress<VertexData, EdgeData>;
+    // friend class distributed_bipartite_random_ingress<VertexData, EdgeData>;
+    // friend class distributed_bipartite_affinity_ingress<VertexData, EdgeData>;
+    // friend class distributed_bipartite_aweto_ingress<VertexData, EdgeData>;
+    // friend class distributed_hybrid_ingress<VertexData, EdgeData>;
+    // friend class distributed_hybrid_ginger_ingress<VertexData, EdgeData>;
 
-    friend class distributed_matrix_hybrid_ingress<VertexData, EdgeData>;
-    friend class distributed_matrix_strict_ingress<VertexData, EdgeData>;
-    friend class distributed_matrix_ginger_ingress<VertexData, EdgeData>;
+    // friend class distributed_matrix_hybrid_ingress<VertexData, EdgeData>;
+    // friend class distributed_matrix_strict_ingress<VertexData, EdgeData>;
+    // friend class distributed_matrix_ginger_ingress<VertexData, EdgeData>;
     friend class distributed_matrix_block_ingress<VertexData, EdgeData>;
-    friend class distributed_topoX_ingress<VertexData, EdgeData>;
+    // friend class distributed_topoX_ingress<VertexData, EdgeData>;
 
     typedef graphlab::vertex_id_type vertex_id_type;
     typedef graphlab::lvid_type lvid_type;
@@ -3348,80 +3329,13 @@ namespace graphlab {
                                 size_t threshold = 100, size_t theta = 100,size_t etheta=1000, size_t nedges = 0, size_t nverts = 0,size_t ceng=1,
                                 size_t interval = std::numeric_limits<size_t>::max()) {
       if(ingress_ptr != NULL) { delete ingress_ptr; ingress_ptr = NULL; }
-      if (method == "oblivious") {
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use oblivious ingress, usehash: " << usehash
-          << ", userecent: " << userecent << std::endl;
-        ingress_ptr = new distributed_oblivious_ingress<VertexData, EdgeData>(rpc.dc(), *this, usehash, userecent);
-      } else if  (method == "random") {
-        if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use random ingress" << std::endl;
-        ingress_ptr = new distributed_random_ingress<VertexData, EdgeData>(rpc.dc(), *this); 
-      } else if  (method == "matrix_hybrid") {
-          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ingress" << std::endl;
-          ingress_ptr = new distributed_matrix_hybrid_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
-      } else if  (method == "matrix_strict") {
-          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ingress" << std::endl;
-          ingress_ptr = new distributed_matrix_strict_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
-      }
-      else if  (method == "matrix_ginger") {
-          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix ginger ingress" << std::endl;
-          ingress_ptr = new distributed_matrix_ginger_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold, nedges, nverts, interval);
-      }else if  (method == "topoX") {
-          if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use topoX ingress" << std::endl;
-          ingress_ptr = new distributed_topoX_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold,theta,etheta,ceng);
-      }else if  (method == "matrix_block") {
+      if  (method == "matrix_block") {
           if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use matrix block ingress" << std::endl;
           ingress_ptr = new distributed_matrix_block_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold,theta,etheta,ceng);
       }
-      else if (method == "grid") {
-        if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use grid ingress" << std::endl;
-        ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "grid");
-      } else if (method == "pds") {
-        if (rpc.procid() == 0)logstream(LOG_EMPH) << "Use pds ingress" << std::endl;
-        ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "pds");
-      } else if (method == "bipartite") {
-        if(data_affinity){
-          if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite ingress w/ affinity" << std::endl;
-          ingress_ptr = new distributed_bipartite_affinity_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
-        } else{
-          if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite ingress w/o affinity" << std::endl;
-          ingress_ptr = new distributed_bipartite_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
-        }
-      } else if (method == "bipartite_aweto") {
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use bipartite_aweto ingress" << std::endl;
-        ingress_ptr = new distributed_bipartite_aweto_ingress<VertexData, EdgeData>(rpc.dc(), *this, favorite);
-      } else if (method == "hybrid") {
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use hybrid ingress" << std::endl;
-        ingress_ptr = new distributed_hybrid_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold);
-        set_cuts_type(HYBRID_CUTS);
-      } else if (method == "hybrid_ginger") {
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Use hybrid ginger ingress" << std::endl;
-        ASSERT_GT(nedges, 0); ASSERT_GT(nverts, 0);
-        ingress_ptr = new distributed_hybrid_ginger_ingress<VertexData, EdgeData>(rpc.dc(), *this, threshold, nedges, nverts, interval);
-        set_cuts_type(HYBRID_GINGER_CUTS);
-      } else {
-        // use default ingress method if none is specified
-        std::string ingress_auto = "";
-        size_t num_shards = rpc.numprocs();
-        int nrow, ncol, p;
-        if (sharding_constraint::is_pds_compatible(num_shards, p)) {
-          ingress_auto="pds";
-          ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "pds");
-        } else if (sharding_constraint::is_grid_compatible(num_shards, nrow, ncol)) {
-          ingress_auto="grid";
-          ingress_ptr = new distributed_constrained_random_ingress<VertexData, EdgeData>(rpc.dc(), *this, "grid");
-        } else {
-          ingress_auto="oblivious";
-          ingress_ptr = new distributed_oblivious_ingress<VertexData, EdgeData>(rpc.dc(), *this, usehash, userecent);
-        }
-        if (rpc.procid() == 0) logstream(LOG_EMPH) << "Automatically determine ingress method: " << ingress_auto << std::endl;
+      else{
+        exit(-1);
       }
-      // batch ingress is deprecated
-      // if (method == "batch") {
-      //   logstream(LOG_EMPH) << "Use batch ingress, bufsize: " << bufsize
-      //     << ", usehash: " << usehash << ", userecent" << userecent << std::endl;
-      //   ingress_ptr = new distributed_batch_ingress<VertexData, EdgeData>(rpc.dc(), *this,
-      //                                                    bufsize, usehash, userecent);
-      // } else 
     } // end of set ingress method
 
 
